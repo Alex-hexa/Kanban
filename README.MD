@@ -7,7 +7,7 @@ This __Kanban board__ is running all in local (DB/APP).
 
 All you have to do is clone this repo :
 ```
-git clone https://
+git clone https://github.com/Alex-hexa/Kanban
 ```
 
 Install Flask :
@@ -22,7 +22,7 @@ python app.py
 
 And go to the URL :
 ```
-http://127.0.0.1:5000
+http://127.0.0.1:5001
 ```
 
 ## Setting

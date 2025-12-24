@@ -6,10 +6,11 @@ from datetime import datetime
 app = Flask(__name__)
 
 DATA_FILE = "kanban_data.json"
+CATEGORIES_FILE = "categories.json"
 
 # Colonnes officielles
 DEFAULT_COLUMNS = ["Pense bête", "À faire", "En cours", "Terminé"]
-CATEGORIES_FILE = "categories.json"
+
 
 def load_categories():
     if os.path.exists(CATEGORIES_FILE):
@@ -17,9 +18,11 @@ def load_categories():
             return json.load(f)
     return []
 
+
 def save_categories(categories):
     with open(CATEGORIES_FILE, "w", encoding="utf-8") as f:
         json.dump(categories, f, indent=2, ensure_ascii=False)
+
 
 def find_category(cat_id, categories):
     for c in categories:
@@ -40,6 +43,7 @@ def update_ticket_categories_by_date(data):
                 days_left = (ticket_date - today).days
             except Exception:
                 continue
+
             if days_left <= 3:
                 ticket["category"] = 1
             elif 4 <= days_left <= 8:
@@ -48,6 +52,7 @@ def update_ticket_categories_by_date(data):
                 ticket["category"] = 3
             elif days_left >= 16:
                 ticket["category"] = 4
+
 
 def empty_data():
     """Crée une structure vide avec les colonnes officielles."""
@@ -64,22 +69,17 @@ def load_data():
             print("Erreur de chargement JSON:", e)
             return empty_data()
 
-        # On part d'une base vide officielle
         data = empty_data()
-
-        # On ne garde que les colonnes officielles, dans l'ordre
         for col in DEFAULT_COLUMNS:
             if col in raw and isinstance(raw[col], list):
                 data[col] = raw[col]
         return data
 
-    # Pas de fichier -> colonnes vides
     return empty_data()
 
 
 def save_data(data):
     """Sauvegarde les données dans le JSON (seulement colonnes officielles)."""
-    # On ne sauvegarde que les colonnes officielles pour éviter les colonnes parasites
     cleaned = empty_data()
     for col in DEFAULT_COLUMNS:
         if col in data and isinstance(data[col], list):
@@ -98,7 +98,12 @@ def index():
     update_ticket_categories_by_date(data)
     save_data(data)
     categories = load_categories()
-    return render_template("index.html", columns=DEFAULT_COLUMNS, tickets=data, categories=categories)
+    return render_template(
+        "index.html",
+        columns=DEFAULT_COLUMNS,
+        tickets=data,
+        categories=categories
+    )
 
 
 @app.route("/add", methods=["POST"])
@@ -218,9 +223,11 @@ def edit_ticket():
 
     return redirect(url_for("index"))
 
+
 @app.route("/categories", methods=["GET"])
 def api_get_categories():
     return jsonify(load_categories())
+
 
 @app.route("/category", methods=["POST"])
 def create_category():
@@ -231,6 +238,7 @@ def create_category():
     categories.append(new_cat)
     save_categories(categories)
     return jsonify(new_cat), 201
+
 
 @app.route("/category/<int:cat_id>", methods=["PATCH"])
 def update_category(cat_id):
@@ -244,6 +252,7 @@ def update_category(cat_id):
             return jsonify(cat)
     return '', 404
 
+
 @app.route("/category/<int:cat_id>", methods=["DELETE"])
 def delete_category(cat_id):
     categories = load_categories()
@@ -253,4 +262,4 @@ def delete_category(cat_id):
 
 
 if __name__ == "__main__":
-    app.run(debug=True, port=5001)
+    app.run(debug=True)
