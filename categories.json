@@ -1,0 +1,22 @@
+[
+    {
+      "id": 1,
+      "name": "Urgent",
+      "color": "#ff0000"
+    },
+    {
+      "id": 2,
+      "name": "Modéré",
+      "color": "#ff8838"
+    },
+    {
+      "id": 3,
+      "name": "Normal",
+      "color": "#23a300"
+    },
+    {
+      "id": 4,
+      "name": "Longtemps",
+      "color": "#1100ff"
+    }
+  ]

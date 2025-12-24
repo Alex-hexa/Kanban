@@ -1,0 +1,407 @@
+<!DOCTYPE html>
+<html lang="fr-FR">
+
+<head>
+    <meta charset="UTF-8">
+    <title>Kanban</title>
+    <script src="https://cdn.tailwindcss.com"></script>
+    <link rel="icon" type="image/png" href="{{ url_for('static', filename='favicon.png') }}">
+    <link rel="stylesheet" href="https://cdnjs.cloudflare.com/ajax/libs/font-awesome/6.5.1/css/all.min.css"
+        crossorigin="anonymous" />
+    <style>
+        body {
+            font-family: -apple-system, BlinkMacSystemFont, "SF Pro Text",
+                "Segoe UI", Roboto, Oxygen, Ubuntu, Cantarell,
+                "Open Sans", "Helvetica Neue", sans-serif;
+        }
+        #viewModal {
+            font-family: -apple-system, BlinkMacSystemFont, "SF Pro Text",
+                "Segoe UI", Roboto, Oxygen, Ubuntu, Cantarell,
+                "Open Sans", "Helvetica Neue", sans-serif;
+        }
+    </style>
+</head>
+
+<body class="bg-slate-100 min-h-screen">
+
+    <div class="container mx-auto px-4 py-6">
+        <div class="flex items-center justify-between mb-6">
+            <h1 class="text-2xl font-bold">Kanban</h1>
+            <button type="button" class="px-2 py-1 ml-2 text-xs bg-purple-500 hover:bg-purple-600 text-white rounded"
+                onclick="openCategoriesModal()">Gérer les catégories</button>
+        </div>
+
+        <div class="grid grid-cols-1 md:grid-cols-4 gap-4">
+            {% for col in columns %}
+            <div class="bg-white rounded shadow p-4 flex flex-col">
+                <!-- En‑tête de colonne -->
+                <div class="flex items-center justify-between mb-2 border-b border-gray-300 pb-2">
+                    <h2 class="font-semibold text-lg">{{ col }}</h2>
+                    <button type="button"
+                        class="px-2 py-1 text-xs bg-green-500 hover:bg-green-600 text-white rounded flex items-center justify-center"
+                        onclick="openAddModal('{{ col }}')" title="Ajouter un ticket">
+                        <i class="fa-solid fa-plus"></i>
+                    </button>
+                </div>
+                <!-- Zone tickets -->
+                <div class="bg-slate-100 rounded p-2 min-h-[50px] flex-1" ondragover="handleDragOver(event)"
+                    ondrop="handleDrop(event, '{{ col }}')">
+                    {% for ticket in tickets[col] %}
+                    <div class="bg-white rounded shadow p-2 mb-2 cursor-move"
+                        draggable="true"
+                        data-column="{{ col }}"
+                        data-index="{{ loop.index0 }}"
+                        data-title="{{ ticket.title|e }}"
+                        data-comment="{{ (ticket.comment or '')|e }}"
+                        data-category-id="{{ ticket.category if ticket.category else '' }}"
+                        data-date="{{ ticket.date if ticket.date else '' }}"
+                        ondblclick="handleTicketDoubleClick(this)"
+                        ondragstart="handleDragStart(event)"
+                        ondragend="handleDragEnd(event)">
+                        <!-- Partie date -->
+                        {% if ticket.date %}
+                        <div class="text-xs text-gray-500 mb-1 flex items-center">
+                            <i class="fa-regular fa-calendar mr-1"></i>
+                            {{ ticket.date }}
+                        </div>
+                        {% endif %}
+                        <!-- Titre et boutons -->
+                        <div class="flex justify-between items-start mb-2">
+                            <div>
+                                <h3 class="font-medium text-sm">{{ ticket.title }}</h3>
+                                {% if ticket.category %}
+                                {% set cat = categories|selectattr('id', 'equalto', ticket.category)|list|first %}
+                                {% if cat %}
+                                <span class="px-2 py-0.5 rounded text-xs font-bold"
+                                    style="background: {{ cat.color }}; color: #fff;">
+                                    {{ cat.name }}
+                                </span>
+                                {% endif %}
+                                {% endif %}
+                            </div>
+                            <div class="flex gap-1">
+                                <!-- Modifier -->
+                                <button type="button"
+                                    class="px-2 py-1 text-xs bg-blue-500 hover:bg-blue-600 text-white rounded flex items-center justify-center"
+                                    data-column="{{ col }}" data-index="{{ loop.index0 }}"
+                                    data-title="{{ ticket.title|e }}" data-comment="{{ (ticket.comment or '')|e }}"
+                                    data-category="{{ ticket.category if ticket.category else '' }}"
+                                    data-date="{{ ticket.date if ticket.date else '' }}"
+                                    onclick="handleEditButtonClick(this)" title="Modifier ce ticket">
+                                    <i class="fa-solid fa-pen"></i>
+                                </button>
+                                <!-- Supprimer -->
+                                <form method="post" action="{{ url_for('delete_ticket') }}">
+                                    <input type="hidden" name="column" value="{{ col }}">
+                                    <input type="hidden" name="index" value="{{ loop.index0 }}">
+                                    <button type="submit"
+                                        class="px-2 py-1 text-xs bg-red-500 hover:bg-red-600 text-white rounded flex items-center justify-center"
+                                        onclick="return confirm('Supprimer ce ticket ?');" title="Supprimer ce ticket">
+                                        <i class="fa-solid fa-trash"></i>
+                                    </button>
+                                </form>
+                            </div>
+                        </div>
+                        {% if ticket.comment %}
+                        <p class="text-xs text-gray-700 whitespace-pre-line">{{ ticket.comment }}</p>
+                        {% endif %}
+                    </div>
+                    {% endfor %}
+                </div>
+            </div>
+            {% endfor %}
+        </div>
+    </div>
+
+    <!-- Modal Edition -->
+    <div id="editModal" class="fixed inset-0 bg-black bg-opacity-50 flex items-center justify-center hidden">
+        <div class="bg-white rounded shadow-lg p-6 w-full max-w-md">
+            <h2 class="text-xl font-semibold mb-4">Modifier le ticket</h2>
+            <form method="post" action="{{ url_for('edit_ticket') }}">
+                <input type="hidden" name="column" id="editColumn">
+                <input type="hidden" name="index" id="editIndex">
+                <div class="mb-3">
+                    <label for="editTitle" class="block text-sm font-medium mb-1">Titre</label>
+                    <input type="text" name="new_title" id="editTitle" class="w-full border rounded px-2 py-1" required>
+                </div>
+                <div class="mb-3">
+                    <label for="editDate" class="block text-gray-700 font-medium mb-1">Date <span class="text-xs text-gray-500">(facultatif)</span></label>
+                    <input type="date" id="editDate" name="date"
+                           class="border rounded px-3 py-2 w-full outline-none focus:ring"
+                           value="">
+                </div>
+                <div class="mb-4">
+                    <label for="editComment" class="block text-sm font-medium mb-1">Commentaire</label>
+                    <textarea name="new_comment" id="editComment" class="w-full border rounded px-2 py-1"
+                        rows="3"></textarea>
+                </div>
+                <div class="mb-4">
+                    <label for="editCategory" class="block text-sm font-medium mb-1">Catégorie</label>
+                    <select name="edit_category" id="editCategory" class="w-full border rounded px-2 py-1">
+                        <option value="">Aucune</option>
+                        {% for cat in categories %}
+                        <option value="{{ cat.id }}">{{ cat.name }}</option>
+                        {% endfor %}
+                    </select>
+                </div>
+                <div class="flex justify-end gap-2">
+                    <button type="button" class="px-3 py-1 text-sm bg-gray-300 hover:bg-gray-400 rounded"
+                        onclick="closeEditModal()">Annuler</button>
+                    <button type="submit"
+                        class="px-3 py-1 text-sm bg-blue-500 hover:bg-blue-600 text-white rounded">Enregistrer</button>
+                </div>
+            </form>
+        </div>
+    </div>
+
+    <!-- Modal Ajout -->
+    <div id="addModal" class="fixed inset-0 bg-black bg-opacity-50 flex items-center justify-center hidden">
+        <div class="bg-white rounded shadow-lg p-6 w-full max-w-md">
+            <h2 class="text-xl font-semibold mb-4">Ajouter un ticket</h2>
+            <form method="post" action="{{ url_for('add_ticket') }}">
+                <input type="hidden" name="column" id="addColumn">
+                <div class="mb-3">
+                    <label for="addTitle" class="block text-sm font-medium mb-1">Titre</label>
+                    <input type="text" name="title" id="addTitle" class="w-full border rounded px-2 py-1" required>
+                </div>
+                <div class="mb-3">
+                    <label for="addDate" class="block text-gray-700 font-medium mb-1">Date <span class="text-xs text-gray-500">(facultatif)</span></label>
+                    <input type="date" id="addDate" name="date"
+                           class="border rounded px-3 py-2 w-full outline-none focus:ring"
+                           value="">
+                </div>
+                <div class="mb-4">
+                    <label for="addComment" class="block text-sm font-medium mb-1">Commentaire</label>
+                    <textarea name="comment" id="addComment" class="w-full border rounded px-2 py-1"
+                        rows="3"></textarea>
+                </div>
+                <div class="mb-4">
+                    <label for="addCategory" class="block text-sm font-medium mb-1">Catégorie</label>
+                    <select name="category" id="addCategory" class="w-full border rounded px-2 py-1">
+                        <option value="">Aucune</option>
+                        {% for cat in categories %}
+                        <option value="{{ cat.id }}">{{ cat.name }}</option>
+                        {% endfor %}
+                    </select>
+                </div>
+                <div class="flex justify-end gap-2">
+                    <button type="button" class="px-3 py-1 text-sm bg-gray-300 hover:bg-gray-400 rounded"
+                        onclick="closeAddModal()">Annuler</button>
+                    <button type="submit"
+                        class="px-3 py-1 text-sm bg-green-500 hover:bg-green-600 text-white rounded">Ajouter</button>
+                </div>
+            </form>
+        </div>
+    </div>
+
+    <!-- MODAL GESTION DES CATEGORIES -->
+    <div id="categoriesModal" class="fixed inset-0 bg-black bg-opacity-50 flex items-center justify-center hidden">
+        <div class="bg-white rounded shadow-lg p-6 w-full max-w-md relative">
+            <button type="button" onclick="closeCategoriesModal()"
+                class="absolute top-2 right-2 text-gray-400 hover:text-red-500 text-2xl focus:outline-none"
+                title="Fermer">
+                <i class="fa-solid fa-xmark"></i>
+            </button>
+            <h2 class="text-xl font-semibold mb-4">Gestion des catégories</h2>
+            <ul id="categoriesList"></ul>
+            <hr class="my-3">
+
+            <div class="flex items-center gap-2 mb-2">
+                <input type="text" id="catName" class="border rounded px-2 py-1 w-full" placeholder="Nom">
+                <input type="color" id="catColor" value="#888888" title="Choisir la couleur">
+                <button
+                    class="px-3 py-1 bg-green-500 hover:bg-green-600 text-white rounded flex items-center justify-center"
+                    onclick="createCategory()" title="Créer une nouvelle catégorie">
+                    <i class="fa-solid fa-plus"></i>
+                </button>
+            </div>
+        </div>
+    </div>
+    <!-- Modal Vue détaillée -->
+    <div id="viewModal" class="fixed inset-0 bg-black bg-opacity-50 flex items-center justify-center hidden z-50">
+        <div class="bg-white rounded-lg shadow-2xl p-8 w-full max-w-3xl relative">
+            <button type="button" onclick="closeViewModal()"
+                class="absolute top-4 right-4 text-gray-400 hover:text-red-500 text-3xl focus:outline-none"
+                title="Fermer">
+                <i class="fa-solid fa-xmark"></i>
+            </button>
+
+            <h2 id="viewTitle" class="text-3xl font-bold mb-4"></h2>
+
+            <div class="mb-4">
+                <span id="viewCategoryBadge" class="px-3 py-1 rounded text-sm font-bold hidden inline-block"></span>
+            </div>
+
+            <!-- DATE AFFICHÉE DANS LA MODALE -->
+            <div id="viewDate" class="text-base text-gray-500 mb-3 flex items-center hidden">
+                <i class="fa-regular fa-calendar mr-2"></i>
+                <span id="viewDateText"></span>
+            </div>
+
+            <div class="border-t pt-4 mt-2">
+                <h3 class="text-lg font-semibold mb-2">Commentaire</h3>
+                <p id="viewComment" class="text-base text-gray-800 whitespace-pre-line leading-relaxed"></p>
+            </div>
+        </div>
+    </div>
+
+    <script>
+        const CATEGORIES = {{ categories | tojson }};
+    </script>
+
+    <script>
+        // MODAL VUE DETAILLEE
+        function handleTicketDoubleClick(ticketDiv) {
+            const title = ticketDiv.getAttribute('data-title') || '';
+            const comment = ticketDiv.getAttribute('data-comment') || '';
+            const categoryId = ticketDiv.getAttribute('data-category-id');
+            const date = ticketDiv.getAttribute('data-date') || '';
+
+            document.getElementById('viewTitle').textContent = title;
+            document.getElementById('viewComment').textContent = comment;
+
+            // Affichage badge catégorie
+            const badge = document.getElementById('viewCategoryBadge');
+            badge.classList.add('hidden');
+            if (categoryId) {
+                const idNum = parseInt(categoryId, 10);
+                const cat = CATEGORIES.find(c => c.id === idNum);
+                if (cat) {
+                    badge.textContent = cat.name;
+                    badge.style.background = cat.color;
+                    badge.style.color = '#fff';
+                    badge.classList.remove('hidden');
+                }
+            }
+
+            // Affichage de la date
+            const viewDate = document.getElementById('viewDate');
+            const viewDateText = document.getElementById('viewDateText');
+            if (date) {
+                viewDateText.textContent = date;
+                viewDate.classList.remove('hidden');
+            } else {
+                viewDateText.textContent = '';
+                viewDate.classList.add('hidden');
+            }
+
+            document.getElementById('viewModal').classList.remove('hidden');
+        }
+
+        function closeViewModal() {
+            document.getElementById('viewModal').classList.add('hidden');
+        }
+        // MODAL Edit
+        function handleEditButtonClick(button) {
+            const column = button.getAttribute('data-column');
+            const index = button.getAttribute('data-index');
+            const title = button.getAttribute('data-title');
+            const comment = button.getAttribute('data-comment');
+            const category = button.getAttribute('data-category');
+            const date = button.getAttribute('data-date');
+            openEditModal(column, index, title, comment, category, date);
+        }
+        function openEditModal(column, index, title, comment, category, date) {
+            document.getElementById('editColumn').value = column;
+            document.getElementById('editIndex').value = index;
+            document.getElementById('editTitle').value = title || '';
+            document.getElementById('editComment').value = comment || '';
+            document.getElementById('editCategory').value = category || '';
+            document.getElementById('editDate').value = date || '';
+            document.getElementById('editModal').classList.remove('hidden');
+        }
+        function closeEditModal() {
+            document.getElementById('editModal').classList.add('hidden');
+        }
+        // MODAL Ajout
+        function openAddModal(column) {
+            document.getElementById('addColumn').value = column;
+            document.getElementById('addTitle').value = '';
+            document.getElementById('addComment').value = '';
+            document.getElementById('addCategory').value = '';
+            document.getElementById('addDate').value = '';
+            document.getElementById('addModal').classList.remove('hidden');
+        }
+        function closeAddModal() {
+            document.getElementById('addModal').classList.add('hidden');
+        }
+        // DRAG & DROP (inchangé)
+        let draggedTicket = null;
+        let draggedFromColumn = null;
+        let draggedFromIndex = null;
+        function handleDragStart(event) {
+            const el = event.currentTarget;
+            draggedTicket = el;
+            draggedFromColumn = el.getAttribute('data-column');
+            draggedFromIndex = el.getAttribute('data-index');
+            el.classList.add('opacity-50');
+            event.dataTransfer.effectAllowed = 'move';
+        }
+        function handleDragEnd(event) {
+            if (draggedTicket) {
+                draggedTicket.classList.remove('opacity-50');
+            }
+            draggedTicket = null; draggedFromColumn = null; draggedFromIndex = null;
+        }
+        function handleDragOver(event) {
+            event.preventDefault();
+            event.dataTransfer.dropEffect = 'move';
+        }
+        function handleDrop(event, toColumn) {
+            event.preventDefault();
+            if (!draggedTicket) return;
+            const formData = new FormData();
+            formData.append('from_column', draggedFromColumn);
+            formData.append('from_index', draggedFromIndex);
+            formData.append('to_column', toColumn);
+            fetch('{{ url_for("move_ticket") }}', {
+                method: 'POST', body: formData
+            }).then(() => { window.location.reload(); });
+        }
+
+        // MODAL GESTION CATEGORIES
+        function openCategoriesModal() {
+            document.getElementById('categoriesModal').classList.remove('hidden');
+            loadCategoriesList();
+        }
+        function closeCategoriesModal() {
+            document.getElementById('categoriesModal').classList.add('hidden');
+        }
+        function loadCategoriesList() {
+            fetch('/categories').then(r => r.json()).then(cats => {
+                let list = document.getElementById('categoriesList');
+                list.innerHTML = '';
+                cats.forEach(cat => {
+                    list.innerHTML += `
+                        <li class="flex items-center gap-2 my-1">
+                            <span class="px-2 py-0.5 rounded text-xs font-bold" 
+                                style="background: ${cat.color}; color: #fff;">${cat.name}</span>
+                            <button onclick="deleteCategory(${cat.id})"
+                                class="ml-2 px-2 py-0.5 bg-red-500 hover:bg-red-600 text-white rounded text-xs">
+                                <i class="fa fa-trash"></i>
+                            </button>
+                        </li>`;
+                });
+            });
+        }
+        function createCategory() {
+            const name = document.getElementById('catName').value.trim();
+            const color = document.getElementById('catColor').value;
+            if (!name) return;
+            fetch('/category', {
+                method: "POST",
+                headers: { 'Content-Type': 'application/json' },
+                body: JSON.stringify({ name, color })
+            }).then(() => {
+                document.getElementById('catName').value = '';
+                loadCategoriesList();
+                window.location.reload();
+            });
+        }
+        function deleteCategory(id) {
+            fetch(`/category/${id}`, { method: "DELETE" })
+                .then(() => { loadCategoriesList(); window.location.reload(); });
+        }
+    </script>
+</body>
+</html>
